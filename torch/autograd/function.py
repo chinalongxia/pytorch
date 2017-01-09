@@ -175,7 +175,7 @@ def _iter_filter(condition):
 
 _iter_variables = _iter_filter(lambda o: isinstance(o, torch.autograd.Variable))
 _iter_tensors = _iter_filter(torch.is_tensor)
-_iter_None_tensors = _iter_filter(lambda o: o is None or torch.is_tensor(o))
+_iter_None_tensors = _iter_filter(lambda o: o is None or isinstance(o, torch.autograd.Variable))
 _map_variable_tensor = _nested_map(lambda o: isinstance(o, torch.autograd.Variable), lambda o: o.data)
 
 def _map_tensor_fromiter(itr):
@@ -214,6 +214,8 @@ class NestedIOFunction(Function):
     @property
     def saved_tensors(self):
         flat_tensors = super(NestedIOFunction, self).saved_tensors
+        # TODO
+        flat_tensors = tuple(t.data for t in flat_tensors)
         return _map_tensor_fromiter(iter(flat_tensors))(self._to_save_nested)
 
     def mark_dirty(self, *args, **kwargs):
@@ -227,3 +229,4 @@ class NestedIOFunction(Function):
 
     def backward_extended(self, *grad_output):
         raise NotImplementedError
+

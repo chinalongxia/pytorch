@@ -180,10 +180,14 @@ class CudnnRNN(NestedIOFunction):
 
     def backward_extended(self, grad_output, grad_hy):
         input, hx, weight, output = self.saved_tensors
+        # input = input.data
+        # hx = tuple(t.data for t in hx)
+        # weight = [tuple(t.data for t in w) for w in weight]
+        # output = output.data
 
         grad_input, grad_weight, grad_hx = None, None, None
 
-        assert(cudnn.is_acceptable(input))
+        assert cudnn.is_acceptable(input)
 
         grad_input = input.new()
         grad_weight = input.new()
@@ -199,7 +203,7 @@ class CudnnRNN(NestedIOFunction):
             hx,
             weight,
             output,
-            grad_output,
+            grad_output.data,
             grad_hy,
             grad_input,
             grad_hx)
@@ -214,7 +218,7 @@ class CudnnRNN(NestedIOFunction):
                 weight,
                 grad_weight)
 
-        return grad_input, grad_weight, grad_hx
+        return Variable(grad_input), [tuple(Variable(g) for g in gw) for gw in grad_weight], tuple(Variable(g) for g in grad_hx)
 
 
 def RNN(*args, **kwargs):
