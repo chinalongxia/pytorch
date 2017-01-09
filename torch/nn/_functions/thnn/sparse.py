@@ -1,6 +1,6 @@
 import torch
 from torch import sparse
-from torch.autograd.function import Function
+from torch.autograd import Variable, Function
 from torch._thnn import type2backend
 
 from . import _all_functions
@@ -68,7 +68,8 @@ class Embedding(Function):
         if self._indices is not None:
             indices = self._indices
         else:
-            indices, = self.saved_tensors
+            # TODO
+            indices = self.saved_tensors[0].data
 
         if not self.sparse:
             if indices.dim() == 2:
@@ -85,11 +86,11 @@ class Embedding(Function):
                 _sorted = _indices = None
 
             # TODO: sparse updates...
-            grad_weight = type(grad_output)(self._weight_size).zero_()
+            grad_weight = type(grad_output.data)(self._weight_size).zero_()
             self._backend.LookupTable_accGradParameters(
                 self._backend.library_state,
                 indices,
-                grad_output,
+                grad_output.data,
                 grad_weight,
                 _count,
                 _sorted,
@@ -102,7 +103,8 @@ class Embedding(Function):
             sp = self._make_sparse(indices)
             go = grad_output.view(-1, grad_output.size()[-1])
             grad_weight = torch.smm(sp, go)
-        return None, grad_weight
+        # TODO
+        return None, Variable(grad_weight)
 
 
 _all_functions.append(Embedding)

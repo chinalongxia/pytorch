@@ -61,7 +61,7 @@ class Variable(_C._VariableBase):
     def grad(self):
         if self.requires_grad and self._grad is None:
             # TODO: this won't have to be zeroed in the future
-            self._grad = self.data.new(self.data.size()).zero_()
+            self._grad = Variable(self.data.new(self.data.size()).zero_())
         return self._grad
 
     @property
@@ -154,6 +154,8 @@ class Variable(_C._VariableBase):
             if self.data.numel() != 1:
                 raise RuntimeError('backward should be called only on a scalar (i.e. 1-element tensor) or with gradient w.r.t. the variable')
             gradient = self.data.new().resize_as_(self.data).fill_(1)
+        if not isinstance(gradient, Variable):
+            gradient = Variable(gradient, volatile=True)
         self._execution_engine.run_backward((self,), (gradient,), retain_variables)
 
     def register_hook(self, hook):

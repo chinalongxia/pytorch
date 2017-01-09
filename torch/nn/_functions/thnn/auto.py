@@ -4,6 +4,7 @@ from collections import defaultdict
 import torch
 from torch._thnn.utils import parse_header, THNN_H_PATH
 from torch.autograd.function import Function, InplaceFunction
+from torch.autograd import Variable
 from torch._thnn import type2backend
 
 from . import _all_functions
@@ -43,11 +44,11 @@ def _make_function_class_criterion(class_name, update_output, update_grad_input,
 
     def backward(self, grad_output):
         input, target = self.saved_tensors
-        grad_input = grad_output.new().resize_as_(input).zero_()
-        getattr(self._backend, update_grad_input.name)(self._backend.library_state, input, target,
-            grad_input, *self.additional_args)
+        grad_input = Variable(grad_output.data.new().resize_as_(input.data).zero_())
+        getattr(self._backend, update_grad_input.name)(self._backend.library_state, input.data, target.data,
+            grad_input.data, *self.additional_args)
         grad_output_expanded = grad_output.view(*repeat(1, grad_input.dim()))
-        grad_input.mul_(grad_output_expanded.expand_as(grad_input))
+        grad_input = grad_input.mul(grad_output_expanded.expand_as(grad_input))
         return grad_input, None
 
     return type(class_name, (Function,), dict(__init__=__init__, forward=forward, backward=backward))
@@ -158,23 +159,23 @@ def _make_function_class(class_name, update_output, update_grad_input, acc_grad_
         if self.needs_input_grad[0]:
             additional_args = self._initialize_buffers('update_grad_input')
             if save_output:
-                additional_args = (output,) + additional_args
+                additional_args = (output.data,) + additional_args
 
-            grad_input = input.new().resize_as_(input).zero_()
+            grad_input = Variable(input.data.new().resize_as_(input.data).zero_())
             params_without_bias = params if len(params) < 2 else params[:1]
             update_grad_input_fn = getattr(self._backend, update_grad_input.name)
             gi_args = params_without_bias + additional_args
-            update_grad_input_fn(self._backend.library_state, input, grad_output, grad_input, *gi_args)
+            update_grad_input_fn(self._backend.library_state, input.data, grad_output.data, grad_input.data, *gi_args)
             grad_input_tuple = (grad_input,)
 
         if acc_grad_parameters and any(self.needs_input_grad[1:]):
             additional_args = self._initialize_buffers('acc_grad_parameters')
-            grad_params = tuple(p.new().resize_as_(p).zero_() for p in params)
+            grad_params = tuple(Variable(p.new().resize_as_(p).zero_()) for p in params)
             appended_grads = len(expected_params) - len(grad_params)
             grad_params += (None,) * appended_grads
             acc_grad_parameters_fn = getattr(self._backend, acc_grad_parameters.name)
             param_args = grad_params + additional_args + (1,)
-            acc_grad_parameters_fn(self._backend.library_state, input, grad_output, *param_args)
+            acc_grad_parameters_fn(self._backend.library_state, input, grad_output.data, *param_args)
             if appended_grads:
                 grad_params = grad_params[:-appended_grads]
 

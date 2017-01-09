@@ -774,6 +774,9 @@ PyObject *THPFunction_saved_tensors(THPFunction *self, void *_unused)
           "inplace operation");
     }
     Py_INCREF(tensor);
+    // TODO
+    if (tensor != Py_None)
+        tensor = THPVariable_New(tensor, NULL, 0);
     PyTuple_SET_ITEM(saved_tensors.get(), i, tensor);
   }
   return saved_tensors.release();

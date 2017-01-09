@@ -288,7 +288,7 @@ class Module(object):
     def zero_grad(self):
         """Sets gradients of all model parameters to zero."""
         for p in self.parameters():
-            p.grad.zero_()
+            p.grad.data.zero_()
 
     def share_memory(self):
         return self._apply(lambda t: t.share_memory_())

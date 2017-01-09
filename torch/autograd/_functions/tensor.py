@@ -19,9 +19,11 @@ class Index(Function):
 
     def backward(self, grad_output):
         # TODO: this won't have to be zeroed
-        grad_input = grad_output.new(self.input_size).zero_()
-        grad_input.index(self.index).copy_(grad_output)
-        return grad_input
+        grad_input = grad_output.data.new(self.input_size).zero_()
+        grad_input.index(self.index).copy_(grad_output.data)
+        # TODO
+        from ..variable import Variable
+        return Variable(grad_input)
 
 
 class SetItem(InplaceFunction):
@@ -512,13 +514,15 @@ class Chunk(Function):
         return result
 
     def backward(self, *grad_output):
-        grad_input = grad_output[0].new(self.input_size)
+        from ..variable import Variable
+        grad_input = grad_output[0].data.new(self.input_size)
         offset = 0
         for grad in grad_output:
             grad_size = grad.size(self.dim)
-            grad_input.narrow(self.dim, offset, grad_size).copy_(grad)
+            grad_input.narrow(self.dim, offset, grad_size).copy_(grad.data)
             offset += grad_size
-        return grad_input
+        # TODO
+        return Variable(grad_input)
 
 
 class Gather(Function):

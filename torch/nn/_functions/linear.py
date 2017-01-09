@@ -1,5 +1,5 @@
 import torch
-from torch.autograd import Function
+from torch.autograd import Function, Variable
 
 
 class Linear(Function):
@@ -23,7 +23,7 @@ class Linear(Function):
         if self.needs_input_grad[1]:
             grad_weight = torch.mm(grad_output.t(), input)
         if bias is not None and self.needs_input_grad[2]:
-            grad_bias = torch.mv(grad_output.t(), self.add_buffer)
+            grad_bias = torch.mv(grad_output.t(), Variable(self.add_buffer))
 
         if bias is not None:
             return grad_input, grad_weight, grad_bias
