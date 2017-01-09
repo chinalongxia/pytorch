@@ -77,7 +77,7 @@ class Embedding(Function):
 
             grad_output = grad_output.contiguous()
 
-            if torch.typename(grad_output) == 'torch.cuda.FloatTensor':
+            if isinstance(grad_output.data, torch.cuda.FloatTensor):
                 _sorted = torch.cuda.LongTensor()
                 _indices = torch.cuda.LongTensor()
                 _count = torch.cuda.LongTensor()
