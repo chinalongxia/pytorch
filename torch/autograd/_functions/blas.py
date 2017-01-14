@@ -4,19 +4,9 @@ from ..function import Function, InplaceFunction
 
 
 # TODO: no need to save all args if the grad w.r.t. some of them is not needed
-class _BlasBase(InplaceFunction):
-
-    def __init__(self, alpha=1, beta=1, inplace=False):
-        super(_BlasBase, self).__init__(inplace)
-        self.alpha = alpha
-        self.beta = beta
-
-    def _get_output(self, arg):
-        if self.inplace:
-            self.mark_dirty(arg)
-            return arg
-        else:
-            return arg.new().resize_as_(arg)
+# TODO
+class _BlasBase(torch._C._BlasFunctionBase, Function):
+    pass
 
 
 class Addmm(_BlasBase):

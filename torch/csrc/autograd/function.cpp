@@ -88,9 +88,8 @@ static void THPFunction_dealloc(THPFunction* self)
 PyObject *THPFunction_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
   THPFunction *self = (THPFunction*)type->tp_alloc(type, 0);
-  if (!self)
-    return NULL;
-  // Python zero-initializes the object memory, so there's no need to initialize
+  if (!self) return NULL;
+  // Python zero-initializes memory, so there's no need to initialize
   // most fields
   self->num_outputs = -1;
   return (PyObject*)self;
@@ -826,6 +825,7 @@ static struct PyMemberDef THPFunction_members[] = {
 
 static struct PyMethodDef THPFunction_methods[] = {
   {(char*)"_do_forward", (PyCFunction)THPFunction_do_forward, METH_VARARGS, NULL},
+  {(char*)"__call__", (PyCFunction)THPFunction_do_forward, METH_VARARGS, NULL},
   {(char*)"_do_backward", (PyCFunction)THPFunction_do_backward, METH_VARARGS, NULL},
   {(char*)"_register_hook_dict", (PyCFunction)THPFunction__register_hook_dict, METH_O, NULL},
   {NULL}
@@ -872,11 +872,13 @@ PyTypeObject THPFunctionType = {
   THPFunction_new                        /* tp_new */
 };
 
+bool THPFunctionImpls_initModule(PyObject *module);
+
 bool THPFunction_initModule(PyObject *module)
 {
-  if (PyType_Ready(&THPFunctionType) < 0)
-    return false;
+  if (PyType_Ready(&THPFunctionType) < 0) return false;
   Py_INCREF(&THPFunctionType);
   PyModule_AddObject(module, "_FunctionBase", (PyObject *)&THPFunctionType);
+  if (!THPFunctionImpls_initModule(module)) return false;
   return true;
 }

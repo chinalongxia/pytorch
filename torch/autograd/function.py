@@ -42,7 +42,6 @@ class Function(_C._FunctionBase):
             :class:`Function` that created corresponding input, and an index
             of the previous function output that's been used.
     """
-    __call__ = _C._FunctionBase._do_forward
 
     def save_for_backward(self, *tensors):
         """Saves given tensors for a future call to :func:`~Function.backward`.
@@ -137,11 +136,8 @@ class Function(_C._FunctionBase):
         raise NotImplementedError
 
 
-class InplaceFunction(Function):
-
-    def __init__(self, inplace=False):
-        super(InplaceFunction, self).__init__()
-        self.inplace = inplace
+class InplaceFunction(_C._InplaceFunctionBase, Function):
+    pass
 
 
 def _nested_map(condition, fn):

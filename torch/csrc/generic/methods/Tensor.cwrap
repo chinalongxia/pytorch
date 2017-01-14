@@ -29,6 +29,21 @@ static PyObject * THPTensor_(storage)(THPTensor *self, PyObject *args)
 }
 
 [[
+  name: THPTensor_(new)
+  python_name: new
+  method_flags: METH_KEYWORDS
+  only_register: True
+]]
+static PyObject * THPTensor_(pynew)(PyTypeObject *type, PyObject *args, PyObject *kwargs);
+PyObject * THPTensor_(new)(THPTensor *self, PyObject *args, PyObject *kwargs)
+{
+#if IS_CUDA
+  THCPAutoGPU gpu_guard(args, (PyObject*)self);
+#endif
+  return THPTensor_(pynew)(Py_TYPE(self), args, kwargs);
+}
+
+[[
   name: storageOffset
   python_name: storage_offset
   return: long

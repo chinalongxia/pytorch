@@ -50,12 +50,16 @@ struct THPFunction {
     int num_outputs;
     char requires_grad;
     char has_freed_buffers;
+
+    // Used only by inplace functions
+    char inplace;
 };
 
 bool THPFunction_initModule(PyObject *module);
 extern PyObject *THPFunctionClass;
 extern PyObject *THPStochasticFunctionClass;
+extern PyTypeObject THPFunctionType;
 
-#define THPFunction_Check(obj) PyObject_IsInstance(obj, THPFunctionClass)
+#define THPFunction_Check(obj) PyObject_IsInstance(obj, (PyObject*)&THPFunctionType)
 
 #endif
