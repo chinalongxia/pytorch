@@ -20,6 +20,10 @@ IF(NOT TH_INSTALL_BIN_SUBDIR
   SET(TH_INSTALL_CMAKE_SUBDIR "share/cmake/TH" CACHE PATH "TH install cmake subdirectory")
 ENDIF()
 
+INCLUDE (CheckIncludeFile)
+INCLUDE (CheckCSourceCompiles)
+INCLUDE (CheckCSourceRuns)
+
 #######################################################################
 ##### flags section
 ######################################################################
@@ -43,6 +47,30 @@ IF(UNIX)
 ENDIF(UNIX)
 
 # OpenMP support?
+FIND_PACKAGE(MKL)
+MESSAGE(STATUS ${MKL_LIBRARIES})
+IF (MKL_FOUND AND CMAKE_COMPILER_IS_GNUCC)
+  MESSAGE(WARNING "MKL needs libiomp to use multithreading that conflicts with "
+                  "gcc's libgomp. Trying to hack around that.")
+
+  SET(BACKUP_FLAGS ${CMAKE_REQUIRED_FLAGS})
+  SET(CMAKE_REQUIRED_FLAGS "-Wl,--as-needed" ${CMAKE_REQUIRED_FLAGS})
+  CHECK_C_SOURCE_RUNS("
+      int main()
+      {
+        return 0;
+      }" HAVE_LINK_AS_NEEDED)
+  SET(CMAKE_REQUIRED_FLAGS ${BACKUP_FLAGS})
+
+  IF (HAVE_LINK_AS_NEEDED)
+    MESSAGE(STATUS "Adding -Wl,--as-needed")
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,--as-needed")
+  ELSE ()
+    MESSAGE(WARNING "--as-needed flag not supported. OMP might not work properly")
+  ENDIF ()
+ENDIF ()
+
+
 SET(WITH_OPENMP ON CACHE BOOL "OpenMP support if available?")
 IF (APPLE AND CMAKE_COMPILER_IS_GNUCC)
   EXEC_PROGRAM (uname ARGS -v  OUTPUT_VARIABLE DARWIN_VERSION)
@@ -89,8 +117,6 @@ IF (CORTEXA9_FOUND)
   SET(CMAKE_C_FLAGS "-mcpu=cortex-a9 ${CMAKE_C_FLAGS}")
 ENDIF (CORTEXA9_FOUND)
 
-INCLUDE (CheckIncludeFile)
-INCLUDE (CheckCSourceCompiles)
 CHECK_INCLUDE_FILE(cpuid.h HAVE_CPUID_H)
 # Check for a cpuid intrinsic
 IF(HAVE_CPUID_H)
