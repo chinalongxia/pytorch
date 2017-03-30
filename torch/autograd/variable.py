@@ -4,8 +4,6 @@ from collections import OrderedDict
 import torch.sparse as sparse
 import torch.utils.hooks as hooks
 
-from ._functions import *
-
 
 class Variable(_C._VariableBase):
     """Wraps a tensor and records the operations applied to it.
@@ -276,10 +274,10 @@ class Variable(_C._VariableBase):
 
     def _add(self, other, inplace):
         if isinstance(other, Variable):
-            return Add(inplace)(self, other)
+            return Add.apply(self, other, inplace)
         else:
             assert not torch.is_tensor(other)
-            return AddConstant(other, inplace)(self)
+            return AddConstant.apply(self, other, inplace)
 
     def add(self, other):
         return self._add(other, False)
@@ -289,10 +287,10 @@ class Variable(_C._VariableBase):
 
     def _sub(self, other, inplace):
         if isinstance(other, Variable):
-            return Sub(inplace=inplace)(self, other)
+            return Sub.apply(self, other, inplace)
         else:
             assert not torch.is_tensor(other)
-            return SubConstant(other, inplace=inplace)(self)
+            return SubConstant.apply(self, other, inplace)
 
     def sub(self, other):
         return self._sub(other, False)
@@ -302,34 +300,33 @@ class Variable(_C._VariableBase):
 
     def mul(self, other):
         if isinstance(other, Variable):
-            return Mul()(self, other)
+            return Mul.apply(self, other)
         else:
             assert not torch.is_tensor(other)
-            return MulConstant(other)(self)
+            return MulConstant.apply(self, other)
 
     def mul_(self, other):
         if not isinstance(other, Variable) and not torch.is_tensor(other):
-            return MulConstant(other, inplace=True)(self)
+            return MulConstant.apply(self, other, True)
         raise RuntimeError("mul_ only supports scalar multiplication")
 
     def div(self, other):
         if isinstance(other, Variable):
-            return Div()(self, other)
+            return Div.apply(self, other)
         else:
             assert not torch.is_tensor(other)
-            return DivConstant(other)(self)
+            return DivConstant.apply(self, other)
 
     def div_(self, other):
-        if not isinstance(other, Variable) and not torch.is_tensor(other):
-            return DivConstant(other, inplace=True)(self)
-        raise RuntimeError("div_ only supports scalar multiplication")
+        assert not torch.is_tensor(other)
+        return DivConstant.apply(self, other, True)
 
     def pow(self, other):
         if isinstance(other, Variable):
-            return Pow()(self, other)
+            return Pow.apply(self, other)
         else:
             assert not torch.is_tensor(other)
-            return PowConstant(other)(self)
+            return PowConstant.apply(self, other)
 
     def exp(self):
         return Exp()(self)
@@ -344,10 +341,10 @@ class Variable(_C._VariableBase):
         return Log1p()(self)
 
     def neg(self):
-        return Negate()(self)
+        return Negate.apply(self)
 
     def neg_(self):
-        return Negate(inplace=True)(self)
+        return Negate.apply(self, True)
 
     def tanh(self):
         return Tanh()(self)
@@ -889,5 +886,6 @@ for method in dir(Variable):
     setattr(Variable._torch, method, as_static)
 
 
+from ._functions import *
 from torch._C import _ImperativeEngine as ImperativeEngine
 Variable._execution_engine = ImperativeEngine()

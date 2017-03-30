@@ -40,7 +40,6 @@ struct THPFunction {
 
     std::vector<output_info_type> *output_info;
     std::vector<torch::autograd::SavedVariable> *saved_variables;
-    int num_forward_inputs;
     char has_freed_buffers;
 
     torch::autograd::PyFunction cdata;

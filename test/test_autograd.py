@@ -7,6 +7,7 @@ import unittest
 from copy import deepcopy
 from collections import OrderedDict
 from torch.autograd import gradcheck
+from torch.autograd.function import once_differentiable
 
 from common import TestCase, run_tests
 from torch.autograd._functions import *
@@ -30,7 +31,37 @@ def backward_engine(engine):
         Variable._execution_engine = _prev_engine
 
 
+def graph_desc(fn):
+    if fn is None:
+        return 'None'
+    result = type(fn).__name__ + '('
+    next_functions = fn.next_functions
+    for next_fn, _ in next_functions:
+        result += graph_desc(next_fn)
+        result += ', '
+    if next_functions:
+        result = result[:-2]
+    return result + ')'
+
+
 class TestAutograd(TestCase):
+
+    def _function_test(self, cls):
+        x = Variable(torch.randn(5, 5), requires_grad=True)
+        y = Variable(torch.randn(5, 5), requires_grad=True)
+        result = cls.apply(x, 2, y)
+        go = Variable(torch.ones(1), requires_grad=True)
+        result.sum().backward(go)
+
+        self.assertEqual(x.grad.data, y.data + torch.ones(5, 5))
+        self.assertEqual(y.grad.data, x.data + torch.ones(5, 5) * 2)
+
+        self.assertFalse(x.grad.volatile)
+        self.assertFalse(y.grad.volatile)
+        self.assertIsNotNone(x.grad.grad_fn)
+        self.assertIsNotNone(y.grad.grad_fn)
+
+        return x, y
 
     def test_function(self):
         class MyFunction(Function):
@@ -44,40 +75,66 @@ class TestAutograd(TestCase):
             @staticmethod
             def backward(ctx, grad_output):
                 var1, var2 = ctx.saved_variables
+                # NOTE: self is the test case here
+                self.assertIsInstance(var1, Variable)
+                self.assertIsInstance(var2, Variable)
+                self.assertIsInstance(grad_output, Variable)
                 return (grad_output + grad_output * var2,
                         grad_output * ctx.scalar + grad_output * var1)
 
-        x = Variable(torch.randn(5, 5), requires_grad=True)
-        y = Variable(torch.randn(5, 5), requires_grad=True)
-        result = MyFunction.apply(x, 2, y)
-        go = Variable(torch.ones(1), requires_grad=True)
-        result.sum().backward(go)
+        x, y = self._function_test(MyFunction)
 
-        self.assertEqual(x.grad.data, y.data + torch.ones(5, 5))
-        self.assertEqual(y.grad.data, x.data + torch.ones(5, 5) * 2)
-
-        self.assertFalse(x.grad.volatile)
-        self.assertFalse(y.grad.volatile)
-        self.assertIsNotNone(x.grad.grad_fn)
-        self.assertIsNotNone(y.grad.grad_fn)
-
-        def desc_graph(fn):
-            result = type(fn).__name__ + '('
-            next_functions = fn.next_functions
-            for next_fn, _ in next_functions:
-                result += desc_graph(next_fn)
-                result += ', '
-            if next_functions:
-                result = result[:-2]
-            return result + ')'
-        x_grad_desc = desc_graph(x.grad.grad_fn)
-        y_grad_desc = desc_graph(y.grad.grad_fn)
+        x_grad_desc = graph_desc(x.grad.grad_fn)
+        y_grad_desc = graph_desc(y.grad.grad_fn)
         self.assertEqual(
             x_grad_desc,
-            'Identity(Add(Error(AccumulateGrad()), Mul(Error(AccumulateGrad()), AccumulateGrad())))')
+            'Identity(AddBackward(Error(AccumulateGrad()), MulBackward(Error(AccumulateGrad()), AccumulateGrad())))')
         self.assertEqual(
             y_grad_desc,
-            'Identity(Add(MulConstant(Error(AccumulateGrad())), Mul(Error(AccumulateGrad()), AccumulateGrad())))')
+            'Identity(AddBackward(MulConstantBackward(Error(AccumulateGrad())), '
+                     'MulBackward(Error(AccumulateGrad()), AccumulateGrad())))')
+
+    def test_once_differentiable(self):
+        class MyFunction(Function):
+
+            @staticmethod
+            def forward(ctx, tensor1, scalar, tensor2):
+                ctx.scalar = scalar
+                ctx.save_for_backward(tensor1, tensor2)
+                return tensor1 + scalar * tensor2 + tensor1 * tensor2
+
+            @staticmethod
+            @once_differentiable
+            def backward(ctx, grad_output):
+                t1, t2 = ctx.saved_tensors
+                # NOTE: self is the test case here
+                self.assertTrue(torch.is_tensor(t1))
+                self.assertTrue(torch.is_tensor(t2))
+                self.assertTrue(torch.is_tensor(grad_output))
+                return (grad_output + grad_output * t2,
+                        grad_output * ctx.scalar + grad_output * t1)
+
+        x, y = self._function_test(MyFunction)
+        x_grad_desc = graph_desc(x.grad.grad_fn)
+        y_grad_desc = graph_desc(y.grad.grad_fn)
+        self.assertEqual(graph_desc(x.grad.grad_fn), 'Identity(Error())')
+        self.assertEqual(graph_desc(y.grad.grad_fn), 'Identity(Error())')
+
+    def test_hessian_vector(self):
+        x = Variable(torch.randn(2, 2), requires_grad=True)
+        y = Variable(torch.randn(2, 2), requires_grad=True)
+        z = x ** 2 + y * x + y ** 2
+        z.backward(Variable(torch.ones(2, 2), requires_grad=True), retain_variables=True)
+        x_grad = 2 * x.data + y.data
+        y_grad = x.data + 2 * y.data
+        self.assertEqual(x.grad.data, x_grad)
+        self.assertEqual(y.grad.data, y_grad)
+        grad_sum = 2 * x.grad + y.grad
+        grad_sum.backward(torch.ones(2, 2))
+        x_hv = torch.ones(2, 2) * 5
+        y_hv = torch.ones(2, 2) * 4
+        self.assertEqual(x.grad.data, x_grad + x_hv)
+        self.assertEqual(y.grad.data, y_grad + y_hv)
 
     def test_hooks(self):
         x = Variable(torch.ones(5, 5), requires_grad=True)
@@ -578,7 +635,7 @@ class TestAutograd(TestCase):
                 gc.collect()
 
         for i in range(10):
-            Variable(torch.randn(10, 10), grad_fn=CollectOnDelete())
+            Variable(torch.randn(10, 10), _grad_fn=CollectOnDelete())
 
     @unittest.skipIf(not torch.cuda.is_available() or torch.cuda.device_count() < 2,
                      "CUDA not available or <2 GPUs detected")
@@ -1010,13 +1067,16 @@ function_tests = [
     (Mul, (), ((M, M), (M, M))),
     (Div, (), ((M, M), torch.rand(M, M) + 5e-2)),
     (Pow, (), (torch.rand(M, M) + 1e-3, torch.rand(M, M) + 0.1)),
-    (AddConstant, (3.14,), ((2, 2),)),
-    (SubConstant, (3.14,), ((L, L),)),
-    (SubConstant, (3.14, True), ((L, L),), 'from_tensor'),
-    (MulConstant, (3.14,), ((L, L),)),
-    (DivConstant, (3.14, True), (torch.rand(L, L) + 1e-1,), 'by_tensor'),
-    (PowConstant, (3.14,), (torch.rand(L, L),)),
-    (PowConstant, (3.14, True), (torch.rand(L, L),), 'tensor_power'),
+    (AddConstant, (), ((2, 2), 3.14)),
+    (AddConstant, (), (3.14, (2, 2)), 'add_tensor'),
+    (SubConstant, (), ((L, L), 3.14)),
+    (SubConstant, (), (3.14, (L, L),), 'sub_tensor'),
+    (MulConstant, (), ((L, L), 3.14)),
+    (MulConstant, (), (3.14, (L, L)), 'mul_tensor'),
+    (DivConstant, (), (torch.rand(L, L) + 1e-1, 3.14)),
+    (DivConstant, (), (3.14, torch.rand(L, L) + 0.5,), 'div_tensor'),
+    (PowConstant, (), (torch.rand(L, L), 3)),
+    (PowConstant, (), (3.14, torch.rand(L, L)), 'tensor_power'),
     (Transpose, (0, 1), (torch.rand(L, L),)),
     (Transpose, (2, 0), (torch.rand(S, S, S),), '3d'),
     (Permute, ((0, 4, 3, 5, 1, 2),), ((1, 2, 3, 4, 5, 6),)),
@@ -1293,21 +1353,29 @@ for test in function_tests:
     def do_test(self, cls=cls, constructor_args=constructor_args,
                 call_args=call_args, test_name=test_name):
         input = create_input(call_args)
-        self.assertTrue(gradcheck(lambda *input: cls(*constructor_args)(*input), input, eps=1e-6, atol=PRECISION))
+        if cls._is_legacy:
+            apply_fn = lambda *input: cls(*constructor_args)(*input)
+            apply_inplace_fn = lambda *input: cls(*constructor_args, inplace=True)(*input)
+        else:
+            apply_fn = lambda *input: cls.apply(*input)
+            apply_inplace_fn = lambda *input: cls.apply(*input, True)
+        self.assertTrue(gradcheck(apply_fn, input, eps=1e-6, atol=PRECISION))
 
         if test_name not in ignore_inplace and issubclass(cls, InplaceFunction):
-            output = cls(*constructor_args)(*input)
+            output = apply_fn(*input)
             if not isinstance(output, tuple):
                 output = (output,)
             inplace_input = deepcopy(input)
             inplace_input_copy = tuple(i + 0 for i in inplace_input)
-            fn = cls(*constructor_args, inplace=True)
-            inplace_output = fn(*inplace_input_copy)
+            inplace_output = apply_inplace_fn(*inplace_input_copy)
             if not isinstance(inplace_output, tuple):
                 inplace_output = (inplace_output,)
             self.assertEqual(inplace_output, output)
             # Check that gradient is the same
             for inp_i, i in zip(inplace_input, input):
+                if not isinstance(inp_i, Variable):
+                    assert not isinstance(i, Variable)
+                    continue
                 if inp_i.grad is not None:
                     inp_i.grad.data.zero_()
                 if i.grad is not None:
@@ -1317,6 +1385,8 @@ for test in function_tests:
                 io.backward(grad)
                 o.backward(grad)
             for inp_i, i in zip(inplace_input, input):
+                if not isinstance(inp_i, Variable):
+                    continue
                 self.assertEqual(inp_i.grad, i.grad)
 
     assert not hasattr(TestAutograd, test_name), 'Two tests have the same name: ' + test_name
