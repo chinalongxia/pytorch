@@ -99,13 +99,16 @@ static inline void THNN_(VolumetricFullDilatedConvolution_shapeCheck)(
                 "expected for weight, but got: %s");
   THArgCheck(dT > 0 && dW > 0 && dH > 0, 11,
              "stride should be greater than zero, but got dT: %d dH: %d dW: %d", dT, dH, dW);
-  THArgCheck(aT < dT && aW < dW && aH < dH, 15,
-             "output adjustment must be smaller than stride, but got "
-             "adjT: %d adjH: %d adjW: %d dT: %d dH: %d dW: %d",
-             aT, aH, aW, dT, dH, dW);
   THArgCheck(dilationT > 0 && dilationW > 0 && dilationH > 0, 15,
              "dilation should be greater than zero, but got dilationT: %d, dilationH: %d, dilationW: %d",
              dilationT, dilationH, dilationW);
+  THArgCheck((aT < dT || aT < dilationT)
+             && (aW < dW || aW < dilationW)
+             && (aH < dH || aH < dilationH), 15,
+             "output padding must be smaller than either stride or dilation,"
+             " but got aT: %d aH: %d aW: %d dT: %d dH: %d dW: %d "
+             "dilationT: %d dilationH: %d dilationW: %d",
+             aT, aH, aW, dT, dH, dW, dilationT, dilationH, dilationW);
 
   int ndim = input->nDimension;
   const int nInputPlane  = (int)weight->size[0];
