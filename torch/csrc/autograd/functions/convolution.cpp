@@ -405,6 +405,7 @@ auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> varia
 
   auto gO = grad_output_.unpack();
   auto weight = weight_.unpack();
+  auto input = input_.unpack();
 
   // Compute ggO = conv(w, ggI) + conv(ggW, i) + ggb
   std::shared_ptr<Variable> ggO = nullptr;
@@ -454,16 +455,17 @@ auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> varia
     gw_conv_params.groups = 1;
     auto weight_size = weight->data->sizes();
     std::vector<long> kernel_size(weight_size.begin() + 2, weight_size.end());
-    auto input_size = ggI->data->sizes();
+    auto input_size = input->data->sizes();
     std::vector<long> input_shape(input_size.begin() + 2, input_size.end());
-    for(size_t i=0; i<gw_conv_params.padding.size(); ++i) {
+    for(size_t i = 0; i < gw_conv_params.padding.size(); ++i) {
       // Check if whole input has been used or not
-      auto numerator = 2 * gw_conv_params.padding[i] -
-            gw_conv_params.dilation[i] * (kernel_size[i] - 1) - 1;
-      auto remainder = (input_shape[i] + numerator) % gw_conv_params.stride[i];
+      auto remainder = (input_shape[i]
+                        + 2 * gw_conv_params.padding[i]
+                        - (gw_conv_params.dilation[i] * (kernel_size[i] - 1) + 1)
+                        + gw_conv_params.stride[i]) % gw_conv_params.stride[i];
       if (remainder != 0) {
         auto used_input_size = input_shape[i] - remainder;
-        ggI = Narrow(i+2, 0, used_input_size).apply({ggI})[0];
+        ggI = Narrow(i + 2, 0, used_input_size).apply({ggI})[0];
       }
     }
     std::swap(gw_conv_params.dilation, gw_conv_params.stride);
@@ -503,20 +505,32 @@ auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> varia
   // Compute gI = convT(gO, ggW)
   std::shared_ptr<Variable> gI = nullptr;
   if (ggW) {
-    // select conv tranpose and swap stride and dilation
+    // select conv tranpose
     ConvParams gi_conv_params(*this);
     gi_conv_params.transposed = true;
+
+    // calculate output_padding
+    auto weight_size = weight->data->sizes();
+    std::vector<long> kernel_size(weight_size.begin() + 2, weight_size.end());
+    auto input_size = input->data->sizes();
+    std::vector<long> input_shape(input_size.begin() + 2, input_size.end());
+    for(size_t i = 0; i < gi_conv_params.padding.size(); ++i) {
+      // Check if whole input has been used or not
+      auto remainder = (input_shape[i]
+                        + 2 * gi_conv_params.padding[i]
+                        - (gi_conv_params.dilation[i] * (kernel_size[i] - 1) + 1)
+                        + gi_conv_params.stride[i]) % gi_conv_params.stride[i];
+      if (remainder != 0) {
+        gi_conv_params.output_padding[i] = remainder;
+      }
+    }
+
+    // swap stride and dilation
+    std::swap(gi_conv_params.dilation, gi_conv_params.stride);
+
     // Disable groups as they are handled separately
     auto groups = gi_conv_params.groups;
     gi_conv_params.groups = 1;
-    for(size_t i=0; i<gi_conv_params.padding.size(); ++i) {
-      if (gi_conv_params.stride[i] != 1) {
-        // TODO: Remove this when transpose dilated is fixed
-        throw std::runtime_error("Second argument of ConvNdBackwardBackward is not zero."
-        "This is not supported at the moment.");
-      }
-    }
-    std::swap(gi_conv_params.dilation, gi_conv_params.stride);
 
     auto ggWt = Transpose(0, 1).apply({ggW})[0];
     auto gOt = Transpose(0, 1).apply({gO})[0];
