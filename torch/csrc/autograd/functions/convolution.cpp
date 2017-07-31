@@ -236,11 +236,14 @@ auto ConvForward::apply(const variable_list& inputs) -> variable_list {
     output = view3d(*output);
   }
 
+  std::cout << "In ConvForward" << std::endl;
+  
   auto outputs = as_tensor_list(std::move(output));
   return wrap_outputs(inputs, std::move(outputs), [&](FunctionFlags f) {
     return std::make_shared<ConvBackward>(
         f, *this,
-        inputs[0]->save(this), inputs[1]->save(this), Variable::save_opt(inputs[2].get(), this),
+        inputs[0]->save(this), inputs[1]->save(this),
+        Variable::save_opt(inputs[2].get(), this),
         std::move(columns), std::move(ones), std::move(convolution));
   });
 };
@@ -249,6 +252,7 @@ auto ConvForward::apply(const variable_list& inputs) -> variable_list {
 // ConvBackward implementation
 
 auto ConvBackward::apply(const variable_list& grad_outputs) -> variable_list {
+  std::cout << "In ConvBackward" << std::endl;
   check_input_variables("ConvNdBackward", grad_outputs, 1);
   if (is_padding_neg()) throw std::runtime_error("negative padding is not supported");
   if (is_output_padding_neg()) throw std::runtime_error("negative output_padding is not supported");
@@ -375,6 +379,7 @@ auto ConvBackward::apply(const variable_list& grad_outputs) -> variable_list {
   all_inputs.push_back(input_var);
   all_inputs.push_back(weight_var);
 
+  std::cout << "In ConvBackward" << std::endl;
   auto outputs =  as_tensor_list(std::move(grad_input),
                                  std::move(grad_weight),
                                  std::move(grad_bias));
@@ -396,6 +401,7 @@ auto ConvBackward::releaseVariables() -> void {
 // ConvBackwardBackward implementation
 
 auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> variable_list {
+  std::cout << "In ConvBackwardBackward" << std::endl;
   check_input_variables("ConvNdBackwardBackward", grad_grad_inputs, 3, 0);
   if (transposed) throw std::runtime_error("ConvBackwardBackward does not support transposed convolution");
 
@@ -450,9 +456,11 @@ auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> varia
   if (ggI) {
     // Modified params with correct padding
     ConvParams gw_conv_params(*this);
+    
     // Disable groups as they are handled separately
     auto groups = gw_conv_params.groups;
     gw_conv_params.groups = 1;
+    
     auto weight_size = weight->data->sizes();
     std::vector<long> kernel_size(weight_size.begin() + 2, weight_size.end());
     auto input_size = input->data->sizes();
@@ -462,7 +470,8 @@ auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> varia
       auto remainder = (input_shape[i]
                         + 2 * gw_conv_params.padding[i]
                         - (gw_conv_params.dilation[i] * (kernel_size[i] - 1) + 1)
-                        + gw_conv_params.stride[i]) % gw_conv_params.stride[i];
+                        + gw_conv_params.stride[i]
+                        ) % gw_conv_params.stride[i];
       if (remainder != 0) {
         auto used_input_size = input_shape[i] - remainder;
         ggI = Narrow(i + 2, 0, used_input_size).apply({ggI})[0];
@@ -560,6 +569,30 @@ auto ConvBackwardBackward::apply(const variable_list& grad_grad_inputs) -> varia
     gI = Transpose(0, 1).apply({gIt})[0];
   }
 
+#define print_size(x)                           \
+  do {                                          \
+    if (x) {                                    \
+      auto szzz = x->data->sizes();             \
+      std::cout << "size of " #x " ";           \
+      for (long i = 0; i < szzz.size(); i++)    \
+        std::cout << szzz[i] << 'x';            \
+      std::cout << std::endl;                   \
+    }                                           \
+    else                                        \
+      std::cout << "No " #x << std::endl;       \
+  } while(0)
+  
+  print_size(ggO);
+  print_size(gO);
+  print_size(weight);
+  print_size(input);
+  print_size(gI);
+  print_size(gW);
+  print_size(ggI);
+  print_size(ggW);
+  print_size(ggb);
+  std::cout << "End ConvBackwardBackward" << std::endl;
+  
   return {ggO, gI, gW};
 }
 

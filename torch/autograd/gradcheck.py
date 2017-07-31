@@ -61,6 +61,7 @@ def contiguous(input):
 
 
 def get_numerical_jacobian(fn, input, target, eps=1e-3):
+    print('numerical jacobian start')
     # To be able to use .view(-1) input must be contiguous
     input = contiguous(input)
     output_size = fn(input).numel()
@@ -88,11 +89,12 @@ def get_numerical_jacobian(fn, input, target, eps=1e-3):
 
             outb.add_(-1, outa).div_(2 * eps)
             d_tensor[i] = outb
-
+    print('numerical jacobian end')
     return jacobian
 
 
 def get_analytical_jacobian(input, output):
+    print('analytical jacobian start')
     jacobian = make_jacobian(input, output.numel())
     grad_output = output.data.clone().zero_()
     flat_grad_output = grad_output.view(-1)
@@ -101,13 +103,19 @@ def get_analytical_jacobian(input, output):
         flat_grad_output.zero_()
         flat_grad_output[i] = 1
         zero_gradients(input)
+        print('go_size: ', grad_output.size())
+        print('output_size: ', output.size())
+        for i, inp in enumerate(input):
+            print('input ', i, inp.size(), inp.grad.size()
+                  if inp.grad is not None else None)
         output.backward(grad_output, retain_graph=True)
+
         for jacobian_x, d_x in zip(jacobian, iter_gradients(input)):
             if d_x is None:
                 jacobian_x[:, i].zero_()
             else:
                 jacobian_x[:, i] = d_x.to_dense() if d_x.is_sparse else d_x
-
+    print('analytical jacobian end')
     return jacobian
 
 
@@ -154,9 +162,21 @@ def gradcheck(func, inputs, eps=1e-6, atol=1e-5, rtol=1e-3):
         analytical = get_analytical_jacobian(_as_tuple(inputs), o)
         numerical = get_numerical_jacobian(fn, inputs, inputs, eps)
 
+        # print(numerical)
+        # 0 = input, 1 = weight, 2 = grad_output
+        print(i, ' length of numerical: ', len(numerical))
+        count = 0
         for a, n in zip(analytical, numerical):
+            print('count:', count)
+            if count == 1:
+                print(n)
+                print(a)
             if not ((a - n).abs() <= (atol + rtol * n.abs())).all():
+                print(a.shape)
+                print(n.shape)
+                print('count: ', count)
                 return False
+            count = count + 1
 
     # check if the backward multiplies by grad_output
     zero_gradients(inputs)
@@ -188,7 +208,7 @@ def gradgradcheck(func, inputs, grad_outputs, eps=1e-6, atol=1e-5, rtol=1e-3):
 
     Args:
         func: Python function that takes Variable inputs and returns
-            a tuple of Variables
+              a tuple of Variables
         inputs: tuple of Variables
         grad_outputs: tuple of Variables
         eps: perturbation for finite differences
@@ -201,9 +221,16 @@ def gradgradcheck(func, inputs, grad_outputs, eps=1e-6, atol=1e-5, rtol=1e-3):
     def new_func(*input_args):
         input_args = input_args[:-len(grad_outputs)]
         outputs = func(*input_args)
+        count = 0
+        for arg in input_args:
+            print('arg ' + str(count) + ' :', arg.size())
+            count = count + 1
+        print('output size: ', outputs.size())
         outputs = _as_tuple(outputs)
         input_args = tuple(x for x in input_args if isinstance(x, Variable) if x.requires_grad)
         grad_inputs = torch.autograd.grad(outputs, input_args, grad_outputs)
         return grad_inputs
 
+    print('length of inputs: ' , len(inputs))
+    print('length of grad_outputs: ', len(grad_outputs))
     return gradcheck(new_func, inputs + grad_outputs, eps, atol, rtol)

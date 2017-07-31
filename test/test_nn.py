@@ -2670,15 +2670,19 @@ class TestNN(NNTestCase):
         _assertGradAndGradgradChecks(self, lambda x1, x2: F.bilinear(x1, x2, module.weight, module.bias),
                                      (input1_1, input2_1))
 
-    def run_conv_double_back_test(self, kern, stride, padding, chan_in, chan_out, batch_size,
-                                  inp_size, dilation, no_weight, groups=1, use_cuda=False, use_bias=True):
+    def run_conv_double_back_test(self, kern, stride, padding,
+                                  chan_in, chan_out, batch_size,
+                                  inp_size, dilation, no_weight,
+                                  groups=1, use_cuda=False, use_bias=True):
         tensor = torch.Tensor(1)
         if use_cuda:
             tensor = tensor.cuda()
 
-        x = Variable(tensor.new(batch_size, chan_in, inp_size, inp_size), requires_grad=True)
+        x = Variable(tensor.new(batch_size, chan_in, inp_size, inp_size),
+                     requires_grad=True)
         x.data.normal_()
-        weight = Variable(tensor.new(chan_out, chan_in // groups, kern, kern), requires_grad=True)
+        weight = Variable(tensor.new(chan_out, chan_in // groups, kern, kern),
+                          requires_grad=True)
         weight.data.normal_()
         if use_bias:
             bias = Variable(tensor.new(chan_out), requires_grad=True)
@@ -2700,7 +2704,8 @@ class TestNN(NNTestCase):
                 else:
                     lx, lweight = inputs
                     lbias = None
-            # We disable cudnn during forward to avoid finite difference imprecision issues
+            # We disable cudnn during forward to avoid finite difference
+            # imprecision issues
             with use_cudnn(False):
                 out = F.conv2d(lx, lweight, lbias, stride, padding, dilation, groups)
             return out
@@ -2741,15 +2746,15 @@ class TestNN(NNTestCase):
                                 "\ndilation: " + str(dilation))
 
     def test_conv_double_backward_no_bias(self):
-        kern = 3
-        stride = 1
-        padding = 2
-        chan_in, chan_out = 2, 4
-        batch_size = 2
-        inp_size = 6
+        kern = 2
+        stride = 2
+        chan_in, chan_out = 1, 1 # 2, 4
+        batch_size = 1
+        inp_size = 4
+        padding = 0
         dilation = 1
         no_weight = False
-        use_bias = True
+        use_bias = False
         result = self.run_conv_double_back_test(kern, stride,
                                                 padding, chan_in, chan_out,
                                                 batch_size, inp_size, dilation,
