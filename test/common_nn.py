@@ -605,6 +605,7 @@ class ModuleTest(TestBase):
         super(ModuleTest, self).__init__(*args, **kwargs)
         self.jacobian_input = kwargs.get('jacobian_input', True)
         self.should_test_cuda = kwargs.get('test_cuda', True)
+        self.should_test_pickle = kwargs.get('pickle', True)
 
     def __call__(self, test_case):
         module = self.constructor(*self.constructor_args)
@@ -620,13 +621,14 @@ class ModuleTest(TestBase):
 
         self.test_noncontig(test_case, module, input)
 
-        # TODO: do this with in-memory files as soon as torch.save will support it
-        with TemporaryFile() as f:
-            test_case._forward(module, input)
-            torch.save(module, f)
-            f.seek(0)
-            module_copy = torch.load(f)
-            test_case.assertEqual(test_case._forward(module, input), test_case._forward(module_copy, input))
+        if self.should_test_pickle:
+            # TODO: do this with in-memory files as soon as torch.save will support it
+            with TemporaryFile() as f:
+                test_case._forward(module, input)
+                torch.save(module, f)
+                f.seek(0)
+                module_copy = torch.load(f)
+                test_case.assertEqual(test_case._forward(module, input), test_case._forward(module_copy, input))
 
         self._do_test(test_case, module, input)
 

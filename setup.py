@@ -407,6 +407,7 @@ main_sources = [
     "torch/csrc/autograd/generated/python_functions.cpp",
     "torch/csrc/autograd/functions/batch_normalization.cpp",
     "torch/csrc/autograd/functions/convolution.cpp",
+    "torch/csrc/autograd/functions/softmax.cpp",
     "torch/csrc/autograd/functions/basic_ops.cpp",
     "torch/csrc/autograd/functions/tensor.cpp",
     "torch/csrc/autograd/functions/accumulate_grad.cpp",
@@ -487,6 +488,7 @@ if WITH_CUDNN:
     main_sources += [
         "torch/csrc/cudnn/BatchNorm.cpp",
         "torch/csrc/cudnn/Conv.cpp",
+        "torch/csrc/cudnn/Softmax.cpp",
         "torch/csrc/cudnn/cuDNN.cpp",
         "torch/csrc/cudnn/GridSampler.cpp",
         "torch/csrc/cudnn/AffineGridGenerator.cpp",

@@ -8,7 +8,8 @@ class LogSoftMax(Module):
         self._backend.LogSoftMax_updateOutput(
             self._backend.library_state,
             input,
-            self.output
+            self.output,
+            0 if input.dim() == 1 or input.dim() == 3 else 1
         )
         return self.output
 
@@ -18,6 +19,7 @@ class LogSoftMax(Module):
             input,
             gradOutput,
             self.gradInput,
-            self.output
+            self.output,
+            0 if input.dim() == 1 or input.dim() == 3 else 1
         )
         return self.gradInput

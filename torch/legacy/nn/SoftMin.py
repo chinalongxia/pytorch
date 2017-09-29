@@ -16,7 +16,8 @@ class SoftMin(Module):
         self._backend.SoftMax_updateOutput(
             self._backend.library_state,
             self.mininput,
-            self.output
+            self.output,
+            0 if input.dim() == 1 or input.dim() == 3 else 1
         )
         return self.output
 
@@ -29,7 +30,8 @@ class SoftMin(Module):
             self.mininput,
             gradOutput,
             self.gradInput,
-            self.output
+            self.output,
+            0 if input.dim() == 1 or input.dim() == 3 else 1
         )
 
         self.gradInput.mul_(-1)

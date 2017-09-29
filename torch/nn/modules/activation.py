@@ -652,9 +652,18 @@ class Softmax(Module):
         >>> print(m(input))
     """
 
+    def __init__(self, dim=1):
+        super(Softmax, self).__init__()
+        self.dim = dim
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if not hasattr(self, 'dim'):
+            self.dim = 1
+
     def forward(self, input):
         assert input.dim() == 2, 'Softmax requires a 2D tensor as input'
-        return F.softmax(input)
+        return F.softmax(input, self.dim)
 
     def __repr__(self):
         return self.__class__.__name__ + ' ()'
@@ -714,8 +723,17 @@ class LogSoftmax(Module):
         >>> print(m(input))
     """
 
+    def __init__(self, dim=1):
+        super(LogSoftmax, self).__init__()
+        self.dim = dim
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if not hasattr(self, 'dim'):
+            self.dim = 1
+
     def forward(self, input):
-        return F.log_softmax(input)
+        return F.log_softmax(input, self.dim)
 
     def __repr__(self):
         return self.__class__.__name__ + ' ()'
